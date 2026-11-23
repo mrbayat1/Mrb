@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<title>MRB</title>
+<style>
+:root{--bg:#f4f4f2;--sf:#fff;--tx:#1a1a1a;--mu:#6b6b6b;--ac:#a87a1f;--bd:#dcdcd6;--dg:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#121212;--sf:#1d1d1d;--tx:#eee;--mu:#9a9a9a;--ac:#d4a63e;--bd:#333;--dg:#f2766d}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#121212;--sf:#1d1d1d;--tx:#eee;--mu:#9a9a9a;--ac:#d4a63e;--bd:#333;--dg:#f2766d}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.6 Vazirmatn,Tahoma,system-ui,sans-serif}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--bd);z-index:5}
+header b{flex:1;font-size:17px}
+main{padding:12px;max-width:640px;margin:auto;padding-bottom:90px}
+button{font:inherit;color:var(--tx);background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:8px 14px;min-height:44px}
+button.pr{background:var(--ac);color:#111;border-color:var(--ac);font-weight:700}
+button.ic{min-height:36px;padding:2px 10px;border:0;background:transparent;color:var(--mu)}
+button.dg{color:var(--dg)}
+.fab{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));inset-inline-start:16px;box-shadow:0 2px 10px #0006}
+.it{display:flex;align-items:center;justify-content:space-between;background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:10px 14px;margin:8px 0}
+.it small{display:block;color:var(--mu)}
+select,input,textarea{width:100%;font:inherit;color:var(--tx);background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:10px;min-height:44px}
+label{display:block;margin:10px 0;color:var(--mu);font-size:14px}
+.bar{display:flex;gap:8px;margin:6px 0}.bar>*{flex:1}
+h4{margin:20px 0 4px;color:var(--ac)}
+.g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.g div{position:relative;aspect-ratio:1;background:var(--sf);border-radius:10px;overflow:hidden}
+.g img{width:100%;height:100%;object-fit:cover}
+.g button{position:absolute;top:2px;inset-inline-start:2px;min-height:30px;padding:0 8px;background:#000a;color:#fff;border:0}
+.md{position:fixed;inset:0;background:#0009;display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
+.bx{background:var(--bg);border-radius:14px;padding:16px;width:100%;max-width:420px}
+.bx h3{margin:0 0 6px}.row{display:flex;gap:8px;margin-top:14px}.row>*{flex:1}
+.vw{position:fixed;inset:0;background:#000;z-index:30;display:flex;align-items:center;justify-content:center}
+.vw img{max-width:100%;max-height:100%}
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 16px;border-radius:20px;z-index:40;display:none}
+audio{width:100%;margin:4px 0}.mu{color:var(--mu);font-size:14px}.empty{text-align:center;color:var(--mu);padding:40px 0}
+</style></head><body>
+<div id="app"></div><div id="toast"></div>
+<input type="file" id="rf" accept=".zip" hidden>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),Q=s=>document.querySelectorAll(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let D={projects:[],episodes:[],scenes:[],shots:[],sort:{episodes:'n+',scenes:'n+',shots:'n+'}},R={v:'home'},hist=[],urls={},idb,mr,ch=[];
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const C={p:'projects',e:'episodes',s:'scenes',h:'shots'};
+const get=(t,id)=>D[C[t]].find(x=>x.id==id);
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2800)}
+const openDB=()=>new Promise((ok,no)=>{const r=indexedDB.open('mrb',1);r.onupgradeneeded=()=>{r.result.createObjectStore('kv');r.result.createObjectStore('media')};r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
+const tx=(s,m,f)=>new Promise((ok,no)=>{const t=idb.transaction(s,m),o=f(t.objectStore(s));t.oncomplete=()=>ok(o&&o.result);t.onerror=()=>no(t.error)});
+const save=()=>tx('kv','readwrite',s=>s.put(JSON.stringify(D),'d')).catch(()=>toast('خطا در ذخیره‌سازی'));
+let sv;const saveSoon=()=>{clearTimeout(sv);sv=setTimeout(save,400)};
+const SZ=['','لانگ شات خیلی باز (ELS)','لانگ شات (LS)','مدیوم لانگ (MLS)','مدیوم (MS)','مدیوم کلوز (MCU)','کلوزآپ (CU)','بیگ کلوزآپ (ECU)'];
+const SORTS=[['n+','شماره: صعودی'],['n-','شماره: نزولی'],['a+','نام: الف تا ی'],['a-','نام: ی تا الف'],['t','آخرین ویرایش']];
+function sorted(l,k){const m=D.sort[k],a=[...l];if(m=='t')return a.sort((x,y)=>(y.upd||0)-(x.upd||0));if(m[0]=='n')return a.sort((x,y)=>m[1]=='+'?x.num-y.num:y.num-x.num);return a.sort((x,y)=>(m[1]=='+'?1:-1)*(x.title||'').localeCompare(y.title||'','fa'))}
+function ask(title,fs,ok){return new Promise(r=>{const d=document.createElement('div');d.className='md';
+d.innerHTML=`<div class="bx"><h3>${esc(title)}</h3>${fs.map(f=>`<label>${esc(f.l)}${f.o?`<select name="${f.k}">${f.o.map(o=>`<option value="${o[0]}"${o[0]==f.v?' selected':''}>${esc(o[1])}</option>`).join('')}</select>`:`<input name="${f.k}" type="${f.t||'text'}" value="${esc(f.v)}"${f.t=='number'?' inputmode="numeric"':''}>`}</label>`).join('')}<div class="row"><button class="pr">${ok||'تأیید'}</button><button>انصراف</button></div></div>`;
+document.body.appendChild(d);const[a,b]=d.querySelectorAll('button');const end=v=>{d.remove();r(v)};
+a.onclick=()=>{const o={};d.querySelectorAll('[name]').forEach(e=>o[e.name]=e.value);end(o)};b.onclick=()=>end(null)})}
+const nm=(t,x)=>t=='p'?x.name:(t=='e'?'قسمت ':t=='s'?'صحنه ':'شات ')+x.num+(x.title?' — '+x.title:'');
+const nextNum=l=>l.length?Math.max(...l.map(x=>x.num))+1:1;
+const mk=(o)=>Object.assign({id:uid(),upd:Date.now()},o);
+function newShot(s,n){return mk({sid:s.id,pid:s.pid,eid:s.eid,num:n,title:'',size:'',kelvin:'',lens:'',iso:'',weather:'',loc:'',desc:'',notes:'',photos:[],voices:[]})}
+function go(r){hist.push(R);R=r;render();scrollTo(0,0)}
+function back(){R=hist.pop()||{v:'home'};render();scrollTo(0,0)}
+async function delMedia(ids){for(const i of ids)await tx('media','readwrite',s=>s.delete(i))}
+async function del(t,id){const x=get(t,id);if(t=='h'){await delMedia([...x.photos,...x.voices])}
+if(t=='s')for(const h of D.shots.filter(h=>h.sid==id))await del('h',h.id);
+if(t=='e')for(const s of D.scenes.filter(s=>s.eid==id))await del('s',s.id);
+if(t=='p'){for(const e of D.episodes.filter(e=>e.pid==id))await del('e',e.id);for(const s of D.scenes.filter(s=>s.pid==id))await del('s',s.id)}
+D[C[t]]=D[C[t]].filter(y=>y.id!=id)}
+const sum=h=>[h.size,h.lens&&h.lens+'mm',h.kelvin&&h.kelvin+'K',h.iso&&'ISO '+h.iso,h.weather,h.loc,h.photos.length&&'📷'+h.photos.length,h.voices.length&&'🎙'+h.voices.length].filter(Boolean).join(' · ')||'خالی';
+const hd=(t,ex)=>`<header>${R.v!='home'?'<button class="ic" data-a="back">→</button>':''}<b>${esc(t)}</b>${ex||''}</header>`;
+const sb=k=>`<div class="bar"><select data-sort="${k}">${SORTS.map(s=>`<option value="${s[0]}"${D.sort[k]==s[0]?' selected':''}>${s[1]}</option>`).join('')}</select></div>`;
+const row=(t,x,sub)=>`<div class="it" data-a="o" data-t="${t}" data-id="${x.id}"><div><b>${esc(nm(t,x))}</b><small>${esc(sub)}</small></div><span><button class="ic" data-a="e" data-t="${t}" data-id="${x.id}">✎</button><button class="ic dg" data-a="x" data-t="${t}" data-id="${x.id}">✕</button></span></div>`;
+const crumbs=()=>{const a=[];if(R.eid)a.push(nm('e',get('e',R.eid)));if(R.sid)a.push(nm('s',get('s',R.sid)));return a.join(' › ')};
+function render(){const v=R.v;let h='';
+if(v=='home'){h=hd('MRB',`<button class="ic" data-a="bk">⚙ بکاپ</button>`)+`<main>${D.projects.map(p=>row('p',p,(p.type=='s'?'سریال':'فیلم / پروژه مستقل')+' · '+D.scenes.filter(s=>s.pid==p.id).length+' صحنه')).join('')||'<div class="empty">هنوز پروژه‌ای نساخته‌ای</div>'}</main><button class="pr fab" data-a="add">+ پروژه جدید</button>`}
+else if(v=='proj'){const p=get('p',R.pid),ser=p.type=='s';const l=ser?sorted(D.episodes.filter(e=>e.pid==p.id),'episodes'):sorted(D.scenes.filter(s=>s.pid==p.id),'scenes');
+h=hd(p.name,`<button class="ic" data-a="fd">🔍 جستجو</button>`)+`<main>${sb(ser?'episodes':'scenes')}${l.map(x=>ser?row('e',x,D.scenes.filter(s=>s.eid==x.id).length+' صحنه'):row('s',x,D.shots.filter(s=>s.sid==x.id).length+' شات')).join('')||'<div class="empty">خالی است</div>'}</main><button class="pr fab" data-a="add">+ ${ser?'قسمت':'صحنه'} جدید</button>`}
+else if(v=='ep'){const l=sorted(D.scenes.filter(s=>s.eid==R.eid),'scenes');h=hd(nm('e',get('e',R.eid)),`<button class="ic" data-a="fd">🔍</button>`)+`<main>${sb('scenes')}${l.map(x=>row('s',x,D.shots.filter(s=>s.sid==x.id).length+' شات')).join('')||'<div class="empty">خالی است</div>'}</main><button class="pr fab" data-a="add">+ صحنه جدید</button>`}
+else if(v=='sc'){const l=sorted(D.shots.filter(s=>s.sid==R.sid),'shots');h=hd(nm('s',get('s',R.sid)))+`<main><div class="mu">${esc(crumbs())}</div>${sb('shots')}${l.map(x=>row('h',x,sum(x))).join('')||'<div class="empty">شاتی نیست</div>'}</main><button class="pr fab" data-a="add">+ شات جدید</button>`}
+else if(v=='shot'){const s=get('h',R.hid);const op=(a,c)=>a.map(o=>`<option value="${o}"${o==c?' selected':''}>${o||'—'}</option>`).join('');
+h=hd('شات '+s.num,'')+`<main><div class="mu">${esc(crumbs())}</div>
+<div class="bar"><label>شماره شات<input data-f="num" type="number" inputmode="numeric" value="${s.num}"></label><label>عنوان<input data-f="title" value="${esc(s.title)}"></label></div>
+<h4>مشخصات دوربین</h4><label>اندازه نما<select data-f="size">${op(SZ,s.size)}</select></label><div class="bar"><label>Kelvin<input data-f="kelvin" inputmode="numeric" value="${esc(s.kelvin)}"></label><label>Lens (mm)<input data-f="lens" inputmode="numeric" value="${esc(s.lens)}"></label><label>ISO<input data-f="iso" inputmode="numeric" value="${esc(s.iso)}"></label></div>
+<h4>شرایط فیلمبرداری</h4><div class="bar"><label>آب‌وهوا<select data-f="weather">${op(['','آفتابی','ابری'],s.weather)}</select></label><label>مکان<select data-f="loc">${op(['','داخلی','خارجی'],s.loc)}</select></label></div>
+<h4>توضیح شات</h4><textarea data-f="desc" rows="6" placeholder="کادربندی، موقعیت دوربین، حرکت، جهت و کیفیت نور، فضا، نکات تداوم...">${esc(s.desc)}</textarea>
+<h4>یادداشت‌های تکمیلی</h4><textarea data-f="notes" rows="3">${esc(s.notes)}</textarea>
+<h4>عکس‌ها (${s.photos.length})</h4><div class="g">${s.photos.map(i=>`<div><img data-m="${i}" data-a="ph"><button data-a="px" data-id="${i}">✕</button></div>`).join('')}</div>
+<label style="margin-top:10px">افزودن عکس از گالری<input type="file" id="pf" accept="image/*" multiple></label>
+<h4>یادداشت صوتی (${s.voices.length})</h4>${s.voices.map(i=>`<div class="bar"><audio controls preload="none" data-m="${i}"></audio><button class="ic dg" style="flex:0" data-a="vx" data-id="${i}">✕</button></div>`).join('')}
+<div class="bar"><button class="pr" data-a="rec">${mr?'⏹ توقف ضبط':'⏺ ضبط صدا'}</button></div>
+<label>یا با ضبط‌کن گوشی / انتخاب فایل صوتی<input type="file" id="vf" accept="audio/*" capture></label></main>`}
+else if(v=='fd'){h=hd('جستجو در '+get('p',R.pid).name)+`<main><label>متن (توضیح، یادداشت، عنوان)<input data-q="q"></label><div class="bar"><label>Lens<input data-q="lens" inputmode="numeric"></label><label>Kelvin<input data-q="kelvin" inputmode="numeric"></label><label>ISO<input data-q="iso" inputmode="numeric"></label></div><label>اندازه نما<select data-q="size"><option value="">همه</option>${SZ.slice(1).map(o=>`<option>${o}</option>`).join('')}</select></label><div class="bar"><label>آب‌وهوا<select data-q="weather"><option value="">همه</option><option>آفتابی</option><option>ابری</option></select></label><label>مکان<select data-q="loc"><option value="">همه</option><option>داخلی</option><option>خارجی</option></select></label></div><div id="res"></div></main>`}
+else if(v=='bk'){const n=D.shots.reduce((a,s)=>a+s.photos.length+s.voices.length,0);h=hd('بکاپ و بازیابی')+`<main><div class="it"><div>${D.projects.length} پروژه · ${D.shots.length} شات · ${n} فایل عکس و صدا<small>${D.last?'آخرین بکاپ: '+D.last:'هنوز بکاپ نگرفته‌ای'}</small></div></div><p class="mu">اطلاعات داخل مرورگر گوشی ذخیره می‌شود. اگر اطلاعات مرورگر پاک شود، از بین می‌رود؛ پس مرتب بکاپ بگیر و فایل را جای امن نگه دار.</p><div class="bar"><button class="pr" data-a="mkb">ساخت فایل بکاپ (ZIP)</button></div><div class="bar"><button data-a="rst">بازیابی از فایل بکاپ</button></div></main>`}
+$('#app').innerHTML=h;hydrate();if(v=='fd')results()}
+async function hydrate(){for(const e of Q('[data-m]')){const id=e.dataset.m;if(!urls[id]){const r=await tx('media','readonly',s=>s.get(id));if(!r)continue;urls[id]=URL.createObjectURL(r.blob)}e.src=urls[id]}}
+function results(){const f=R.f||{},low=s=>String(s||'').toLowerCase();
+const l=D.shots.filter(h=>h.pid==R.pid&&(!f.lens||low(h.lens).includes(low(f.lens)))&&(!f.kelvin||String(h.kelvin).includes(f.kelvin))&&(!f.iso||String(h.iso).includes(f.iso))&&(!f.size||h.size==f.size)&&(!f.weather||h.weather==f.weather)&&(!f.loc||h.loc==f.loc)&&(!f.q||low(h.desc+' '+h.notes+' '+h.title).includes(low(f.q))));
+$('#res').innerHTML=`<p class="mu">${l.length} نتیجه</p>`+l.slice(0,100).map(h=>{const s=get('s',h.sid),e=s&&s.eid?get('e',s.eid):null;return `<div class="it" data-a="rs" data-id="${h.id}"><div><b>${esc([e&&nm('e',e),s&&nm('s',s),nm('h',h)].filter(Boolean).join(' › '))}</b><small>${esc(sum(h))}</small>${h.desc?`<small>${esc(h.desc.slice(0,80))}</small>`:''}</div></div>`}).join('')}
+async function addMedia(s,k,b){const id=uid();await tx('media','readwrite',m=>m.put({blob:b,type:b.type},id));s[k].push(id);s.upd=Date.now();await save();render()}
+async function rec(){if(mr){mr.stop();return}const s=get('h',R.hid);
+try{const st=await navigator.mediaDevices.getUserMedia({audio:true});mr=new MediaRecorder(st);ch=[];mr.ondataavailable=e=>ch.push(e.data);
+mr.onstop=async()=>{st.getTracks().forEach(t=>t.stop());const b=new Blob(ch,{type:mr.mimeType});mr=null;await addMedia(s,'voices',b)};mr.start();render()}
+catch(e){mr=null;toast('میکروفون در دسترس نیست. از «ضبط‌کن گوشی» پایین‌تر استفاده کن')}}
+async function mkBackup(){if(typeof JSZip=='undefined')return toast('کتابخانه بکاپ بارگذاری نشده؛ یک بار با اینترنت اپ را باز کن');
+toast('در حال ساخت بکاپ...');const z=new JSZip(),types={};
+for(const s of D.shots)for(const i of[...s.photos,...s.voices]){const r=await tx('media','readonly',m=>m.get(i));if(r){z.file('media/'+i,r.blob);types[i]=r.type}}
+D.last=new Date().toLocaleDateString('fa-IR');z.file('data.json',JSON.stringify({app:'MRB',v:1,D,types}));
+const buf=await z.generateAsync({type:'arraybuffer'});
+try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([buf],{type:'application/zip'}));a.download='MRB-backup-'+new Date().toISOString().slice(0,10)+'.zip';document.body.appendChild(a);a.click();a.remove();await save();toast('بکاپ ساخته شد؛ در دانلودها ببین');render()}catch(e){toast('ساخت بکاپ انجام نشد')}}
+async function restore(file){try{const z=await JSZip.loadAsync(file),j=JSON.parse(await z.file('data.json').async('string'));if(j.app!='MRB')throw 0;
+const ok=await ask('همه اطلاعات فعلی با این بکاپ جایگزین می‌شود. ادامه می‌دهی؟',[],'بازیابی');if(!ok)return;
+await tx('media','readwrite',m=>m.clear());
+for(const i in j.types){const f=z.file('media/'+i);if(f){const b=await f.async('blob');await tx('media','readwrite',m=>m.put({blob:new Blob([b],{type:j.types[i]}),type:j.types[i]},i))}}
+D=j.D;urls={};await save();hist=[];R={v:'home'};render();toast('بازیابی کامل شد')}catch(e){toast('این فایل بکاپ معتبر MRB نیست')}}
+async function onClick(e){const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a,t=b.dataset.t,id=b.dataset.id;
+if(a=='back')return back();if(a=='bk')return go({v:'bk'});if(a=='fd')return go({v:'fd',pid:R.pid,f:{}});
+if(a=='o'){const x=get(t,id);if(t=='p')go({v:'proj',pid:id});if(t=='e')go({v:'ep',pid:x.pid,eid:id});if(t=='s')go({v:'sc',pid:x.pid,eid:x.eid,sid:id});if(t=='h')go({v:'shot',pid:x.pid,eid:x.eid,sid:x.sid,hid:id});return}
+if(a=='rs'){const x=get('h',id);return go({v:'shot',pid:x.pid,eid:x.eid,sid:x.sid,hid:id})}
+if(a=='add'){const v=R.v;
+if(v=='home'){const o=await ask('پروژه جدید',[{k:'n',l:'نام پروژه'},{k:'t',l:'نوع',o:[['f','فیلم / مستند / کوتاه / تبلیغاتی'],['s','سریال (دارای قسمت)']]}]);if(o&&o.n.trim())D.projects.push(mk({name:o.n.trim(),type:o.t}))}
+else{const sc=v=='sc';const p=get('p',R.pid),ser=v=='proj'&&p.type=='s';
+const l=ser?D.episodes.filter(x=>x.pid==R.pid):sc?D.shots.filter(x=>x.sid==R.sid):D.scenes.filter(x=>(R.eid?x.eid==R.eid:x.pid==R.pid&&!x.eid));
+const o=await ask(ser?'قسمت جدید':sc?'شات جدید':'صحنه جدید',[{k:'n',l:'شماره',t:'number',v:nextNum(l)},{k:'t',l:'نام (اختیاری)',v:''}]);if(!o)return;const n=Number(o.n);if(!n&&n!==0)return toast('شماره معتبر نیست');
+if(ser)D.episodes.push(mk({pid:R.pid,num:n,title:o.t}));else if(sc)D.shots.push(newShot(get('s',R.sid),n));
+else{const s=mk({pid:R.pid,eid:R.eid||null,num:n,title:o.t});D.scenes.push(s);for(let i=1;i<=10;i++)D.shots.push(newShot(s,i))}}
+await save();return render()}
+if(a=='e'){const x=get(t,id);const o=t=='p'?await ask('ویرایش پروژه',[{k:'t',l:'نام',v:x.name}]):await ask('ویرایش',[{k:'n',l:'شماره',t:'number',v:x.num},{k:'t',l:'نام (اختیاری)',v:x.title}]);if(!o)return;
+if(t=='p')x.name=o.t.trim()||x.name;else{if(o.n!==''&&!isNaN(Number(o.n)))x.num=Number(o.n);x.title=o.t}x.upd=Date.now();await save();return render()}
+if(a=='x'){const x=get(t,id);const o=await ask('«'+nm(t,x)+'» و همه زیرمجموعه‌ها و فایل‌هایش حذف شود؟',[],'حذف');if(!o)return;await del(t,id);await save();return render()}
+if(a=='ph'){const v=document.createElement('div');v.className='vw';v.innerHTML=`<img src="${b.src}">`;v.onclick=()=>v.remove();document.body.appendChild(v);return}
+if(a=='px'||a=='vx'){const s=get('h',R.hid),k=a=='px'?'photos':'voices';const o=await ask('این مورد حذف شود؟',[],'حذف');if(!o)return;s[k]=s[k].filter(i=>i!=id);await delMedia([id]);await save();return render()}
+if(a=='rec')return rec();if(a=='mkb')return mkBackup();if(a=='rst')return $('#rf').click()}
+document.addEventListener('click',onClick);
+document.addEventListener('input',e=>{const t=e.target;if(t.dataset.f){const s=get('h',R.hid);let v=t.value;if(t.dataset.f=='num'){if(v===''||isNaN(Number(v)))return;v=Number(v)}s[t.dataset.f]=v;s.upd=Date.now();saveSoon()}
+if(t.dataset.q){R.f=R.f||{};R.f[t.dataset.q]=t.value;results()}});
+document.addEventListener('change',async e=>{const t=e.target;
+if(t.dataset.sort){D.sort[t.dataset.sort]=t.value;await save();render()}
+else if(t.dataset.f=='size'||t.dataset.f=='weather'||t.dataset.f=='loc'){const s=get('h',R.hid);s[t.dataset.f]=t.value;s.upd=Date.now();saveSoon()}
+else if(t.id=='pf'){const s=get('h',R.hid);for(const f of t.files)await addMedia(s,'photos',f)}
+else if(t.id=='vf'){const s=get('h',R.hid);for(const f of t.files)await addMedia(s,'voices',f)}
+else if(t.id=='rf'&&t.files[0]){await restore(t.files[0]);t.value=''}});
+(async()=>{try{idb=await openDB();const r=await tx('kv','readonly',s=>s.get('d'));if(r)D=Object.assign(D,JSON.parse(r));navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){toast('حافظه مرورگر در دسترس نیست')}render()})();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
